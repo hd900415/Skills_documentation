@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: devops-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins-server
+  template:
+    metadata:
+      labels:
+        app: jenkins-server
+    spec:
+      imagePullSecrets:
+        - name: harbor-secret
+      serviceAccountName: jenkins-admin
+      containers:
+        - name: jenkins
+          image: harbor.galaxymeeting.live/im/jenkins-maven:v1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: "true"
+            runAsUser: 0 
+          resources:
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+            requests:
+              memory: "500Mi"
+              cpu: "500m"
+          ports:
+            - name: httpport
+              containerPort: 8080
+            - name: jnlpport
+              containerPort: 50000
+          livenessProbe:
+            httpGet:
+              path: "/login"
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: "/login"
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: jenkins-data
+              mountPath: /var/jenkins_home 
+            - name: docker
+              mountPath: /run/docker.sock
+            - name: docker-home
+              mountPath: /usr/bin/docker
+            - name: mvn-settings
+              mountPath: /usr/local/appache-maven-3.9.4/conf/settings.xml
+              subPath: settings.xml
+            - name: daemon
+              mountPath: /etc/docker/daemon.json
+              subPath: daemon.json
+            - name: kubectl
+              mountPath: /usr/bin/kubectl
+      volumes:
+        - name: kubectl
+          hostPath:
+            path: /usr/bin/kubectl
+        - name: jenkins-data
+          persistentVolumeClaim:
+              claimName: jenkins-pvc
+        - name: docker
+          hostPath:
+            path: /run/docker.sock
+        - name: docker-home
+          hostPath:
+            path: /usr/bin/docker
+        - name: mvn-settings
+          ConfigMap:
+            name: mvn-settings
+            items:
+            - key: settings.xml
+              path: settings.xml
+        - name: daemon
+          hostPath:
+            path: /etc/docker/

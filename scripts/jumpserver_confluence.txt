@@ -1,0 +1,92 @@
+echo '
+[client]
+default-character-set = utf8
+[mysql]
+default-character-set = utf8
+[mysqld]
+character-set-server=utf8
+innodb_log_file_size=3G
+character_set_server = utf8mb4
+innodb_default_row_format=DYNAMIC
+innodb_large_prefix=ON
+#innodb_file_format=Barracud
+default-storage-engine=INNODB ' > /opt/jira/my.cnf 
+
+
+mkdir -p /opt/confluence/mysql
+echo '[client]
+default-character-set =utf8
+[mysql]
+default-character-set =utf8
+[mysqld]
+character_set_server =utf8
+collation-server=utf8_bin
+max_allowed_packet=256M
+innodb_log_file_size=256M
+default-storage-engine=INNODB
+transaction-isolation=READ-COMMITTED
+binlog_format=row ' > /opt/confluence/my.cnf 
+
+
+docker run \
+--name mysqlForConfluence \
+--restart always \
+-p 3306:3306 \
+-v /opt/confluence/mysql/:/var/lib/mysql \
+-v /opt/confluence/my.cnf:/etc/mysql/my.cnf \
+-e MYSQL_ROOT_PASSWORD=78RiOG4ZP8c \
+-d mysql:5.7
+
+
+docker run --name confluence \
+--restart always \
+--link mysqlForConfluence:mysql \
+-p 8090:8090 \
+-d confluence/confluence:7.13.1201.
+
+
+
+docker run --rm -it \
+-v /letsencrypt/certbot/etc/letsencrypt:/etc/letsencrypt \             # 证书申请工作目录
+-v /letsencrypt/certbot/var/log/letsencrypt:/var/log/letsencrypt \     # 日志记录
+-v /letsencrypt/site:/data/letsencrypt \                               # ACME验证token目录，与nginx服务器共享
+certbot/certbot \
+certonly --webroot \                                                   # 指定ACME验证方式：token文件验证
+--email youremail@domain.com --agree-tos --no-eff-email \              # 申请者邮件
+--webroot-path=/data/letsencrypt \                                     # ACME验证token文件放置目录
+-d conf.appleasp.com -d  jumpserver.appleasp.com                                     # 指定要申请证书的域名列表
+
+docker run --rm -it \
+
+docker run --name confluence \
+--restart always \
+--link mysqlForConfluence:mysql \
+--link jira:jira \
+-p 8090:8090 \
+-v /opt/atlassian/confluence/data/:/home/confluence_data \
+-v /opt/atlassian/confluence/opt/:/opt/atlassian/confluence \
+-v /opt/atlassian/confluence/var/:/var/atlassian/confluence \
+-d confluence/confluence:7.13.0.1201
+
+
+docker run --name confluence \
+--restart always \
+--link mysqlForConfluence:mysql \
+-p 8090:8090 \
+-v /opt/atlassian/confluence/:/opt/atlassian/confluence/ \
+-d confluence/confluence:7.13.0.1201
+
+
+
+
+
+create database confluence character set 'UTF8';
+create user confluence identified by 'confluence';
+grant all privileges on `confluence`.* to 'confluence'@'%' identified by 'confluence' with grant option;
+grant all privileges on `confluence`.* to 'confluence'@'localhost' identified by 'confluence' with grant option;
+flush privileges;
+alter database confluence character set utf8 collate utf8_bin;
+set global tx_isolation='READ-COMMITTED';
+
+root/78RiOG4ZP8c
+confluence/lr8NrF4v9gJH1Jz8

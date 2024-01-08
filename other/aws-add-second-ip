@@ -1,0 +1,9 @@
+# 1.分配弹性IP
+# 2.管理实例，添加新的内网IP
+# 3.关联内网IP和弹性IP
+# 4.在实例中添加新的内网IP。
+ip add dev eth0 172.31.15.134/20 # 根据实际IP配置
+# 5.放入开机自启动 
+echo 'ip add dev eth0 172.31.15.134/20 # 根据实际IP配置' >> /etc/rc.d/rc.local
+# 添加执行权限
+chmoe +x  /etc/rc.d/rc.local

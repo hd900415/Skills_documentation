@@ -1,0 +1,20 @@
+apiVersion: v1  # API 版本
+kind: PersistentVolume  # Kubernetes 资源类型
+metadata:
+  name: example-pv  # PV 的名称
+  labels:
+    type: local  # 标签，用于标识和选择
+spec:
+  capacity:
+    storage: 10Gi  # 存储容量
+  volumeMode: Filesystem  # 卷模式，可选为 Filesystem 或 Block
+  accessModes:  # 访问模式
+    - ReadWriteOnce  # 读写模式，这里的选项还包括 ReadOnlyMany 和 ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain  # 回收策略，选项包括 Retain, Recycle, 和 Delete
+  storageClassName: standard  # 存储类名称，用于绑定特定类型的存储
+  mountOptions:  # 挂载选项，例如 ["ro", "soft"]
+    - ro
+    - soft
+  hostPath:  # 主机路径，用于本地存储，其他类型的存储（如 nfs, iscsi）将有不同的配置
+    path: "/somepath/data"  # 主机上的路径
+    type: DirectoryOrCreate  # 路径类型，可选值包括 DirectoryOrCreate, Directory, FileOrCreate, File, Socket, CharDevice, BlockDevice, 和 None

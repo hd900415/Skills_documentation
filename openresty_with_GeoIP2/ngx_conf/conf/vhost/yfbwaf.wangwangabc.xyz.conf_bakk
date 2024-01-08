@@ -1,0 +1,161 @@
+upstream api_imserver {
+    server 47.242.0.102:9909 ;
+    #server 47.242.0.102:9909 weight=1 max_fails=2 fail_timeout=30s;
+    keepalive 65;
+}
+server {
+    listen 80;
+    server_name yfbwaf.wangwangabc.xyz;
+    #ssl_certificate /usr/local/openresty/nginx/conf/ssl/full_chain.pem;
+    #ssl_certificate_key /usr/local/openresty/nginx/conf/ssl/private.key;
+    #ssl_session_timeout 5m;
+    #ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
+    #ssl_prefer_server_ciphers on;
+    #ssl_ciphers "TLS13-AES-256-GCM-SHA384:TLS13-CHACHA20-POLY1305-SHA256:TLS13-AES-128-GCM-SHA256:TLS13-AES-128-CCM-8-SHA256:TLS13-AES-128-CCM-SHA256:EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5";
+    #ssl_session_cache builtin:1000 shared:SSL:10m;
+    access_log  /data/nginx/logs/yfbwaf.wangwangabc.xyz.log main_json;
+    error_log /data/nginx/logs/yfbwaf.wangwangabc.xyz_eror.log error;
+
+    location ^~ /helpRecharge {
+        proxy_pass  http://api_imserver/helpRecharge;
+    	proxy_buffering off;
+	proxy_request_buffering off;
+    	proxy_http_version 1.1;
+   	proxy_set_header Host $host;
+    	proxy_set_header Upgrade $http_upgrade;
+   	proxy_set_header Connection $http_connection;
+    	proxy_set_header X-Forwarded-For $remote_addr;
+    	proxy_ignore_client_abort on;
+    	proxy_connect_timeout 60;
+    	proxy_send_timeout 60s;
+    	proxy_read_timeout 60s;
+	proxy_cache web_cache;
+	proxy_cache_valid  200 302 304 1d;
+	proxy_cache_key $host$uri$is_args$args; 
+	
+}
+    location ^~ /helpWithdraw {
+        proxy_pass  http://api_imserver/helpRecharge;
+    	proxy_buffering off;
+	proxy_request_buffering off;
+    	proxy_http_version 1.1;
+   	proxy_set_header Host $host;
+    	proxy_set_header Upgrade $http_upgrade;
+   	proxy_set_header Connection $http_connection;
+    	proxy_set_header X-Forwarded-For $remote_addr;
+    	proxy_ignore_client_abort on;
+    	proxy_connect_timeout 60;
+    	proxy_send_timeout 60s;
+    	proxy_read_timeout 60s;
+        proxy_cache web_cache;
+        proxy_cache_valid  200 302 304 1d;
+        proxy_cache_key $host$uri$is_args$args;
+
+}
+    location ^~ /file_stream {
+        proxy_pass  http://api_imserver/helpRecharge;
+    	proxy_buffering off;
+	proxy_request_buffering off;
+    	proxy_http_version 1.1;
+   	proxy_set_header Host $host;
+    	proxy_set_header Upgrade $http_upgrade;
+   	proxy_set_header Connection $http_connection;
+    	proxy_set_header X-Forwarded-For $remote_addr;
+    	proxy_ignore_client_abort on;
+    	proxy_connect_timeout 60;
+    	proxy_send_timeout 60s;
+    	proxy_read_timeout 60s;
+}
+    location ~* \.(gif|jpg|jpeg|png|bmp|swf)$ {
+	proxy_pass  http://api_imserver;
+        proxy_buffering off;
+        proxy_pass_request_headers on; 
+        proxy_set_header Referer ''; 
+        proxy_http_version 1.1;
+        proxy_set_header Connection ""; 
+        add_header backendIP $upstream_addr;
+        proxy_intercept_errors on; 
+        proxy_set_header Host $host; 
+        proxy_headers_hash_max_size 51200;
+        proxy_headers_hash_bucket_size 6400;
+        proxy_set_header X-Forwarded-For $http_x_forwarded_for;
+        error_page  404     /404.html;
+        proxy_cache web_cache;
+        proxy_cache_valid  200 302 304 1d;
+        proxy_cache_key $host$uri$is_args$args;
+
+        expires 10d;
+    }
+ 
+    location ~* \.(js|css)$ {
+	proxy_pass  http://api_imserver;
+  
+        proxy_buffering off;
+        proxy_pass_request_headers on; 
+        proxy_set_header Referer ''; 
+        proxy_http_version 1.1;
+        proxy_set_header Connection ""; 
+        add_header backendIP $upstream_addr;
+        proxy_set_header   X-Up-Ip   $realip_remote_addr;
+        proxy_set_header   X-Up-Port   $server_port;
+        proxy_intercept_errors on; 
+        proxy_set_header Host $host; 
+        proxy_headers_hash_max_size 51200;
+        proxy_headers_hash_bucket_size 6400;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header REMOTE-HOST $remote_addr;
+        error_page  404     /404.html;
+        proxy_cache web_cache;
+        proxy_cache_valid  200 302 304 1d;
+        proxy_cache_key $host$uri$is_args$args;
+        expires 1h;
+    }
+    location ^~ /static {  
+        proxy_pass  http://api_imserver/static;
+        proxy_buffering off;
+        proxy_pass_request_headers on;
+        proxy_set_header Referer '';
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+	proxy_intercept_errors on;
+        proxy_set_header Host $host; 
+        proxy_headers_hash_max_size 51200;
+	proxy_headers_hash_bucket_size 6400;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header REMOTE-HOST $remote_addr;
+        proxy_set_header X-Forwarded-For $http_x_forwarded_for;
+        proxy_cache web_cache;
+        proxy_cache_valid  200 302 304 1d;
+        proxy_cache_key $host$uri$is_args$args;
+	error_page  404     /404.html;
+    }
+    location ^~ / {  
+        proxy_pass  http://api_imserver;
+    	proxy_buffering off;
+	proxy_request_buffering off;
+    	proxy_http_version 1.1;
+	#proxy_set_header Connection "";
+   	proxy_set_header Host $host;
+    	proxy_set_header Upgrade $http_upgrade;
+   	proxy_set_header Connection $http_connection;
+    	proxy_set_header X-Forwarded-For $remote_addr;
+    	proxy_ignore_client_abort on;
+    	proxy_connect_timeout 60;
+    	proxy_send_timeout 60s;
+    	proxy_read_timeout 60s;
+    	send_timeout 600;
+	error_page  404     /404.html;
+
+    }
+    location = /favicon.ico {
+	 access_log off; 
+ 	 log_not_found off; 
+  	}
+    location = /robots.txt  {
+	 access_log off;
+	 log_not_found off; 
+	} 
+
+    error_page    404  /404.html;
+
+}

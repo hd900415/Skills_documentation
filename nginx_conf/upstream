@@ -1,0 +1,5 @@
+upstream newapi_imserver {
+    #server 47.242.0.102:9909 ;
+    server  49.0.245.2:80 weight=1 max_fails=2 fail_timeout=30s;
+    keepalive 65;
+}

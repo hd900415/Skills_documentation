@@ -1,0 +1,22 @@
+server {
+    listen       82;
+    #server_name  api.appleasp.com.conf;# 服务器地址或绑定域名
+    access_log  /data/nginx/logs/admin.appleasp.com.log main_json;
+
+    location ^~ /admin {  
+        proxy_pass  http://2.59.155.30:86/admin;
+        #proxy_set_header作用：设置发送到后端服务器(上面proxy_pass)的请求头值  
+        #当Host设置为 $http_host 时，则不改变请求头的值;
+        #当Host设置为 $proxy_host 时，则会重新设置请求头中的Host信息;
+        #当为$host变量时，它的值在请求包含Host请求头时为Host字段的值，在请求未携带Host请求头时为虚拟主机的主域名;
+        #当为$host:$proxy_port时，即携带端口发送 ex: $host:8080 】
+        proxy_set_header Host $host; 
+        proxy_headers_hash_max_size 51200;
+	proxy_headers_hash_bucket_size 6400;
+        proxy_set_header X-Real-IP $remote_addr; # 在web服务器端获得用户的真实ip 需配置条件①    【 $remote_addr值 = 用户ip 】
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;# 在web服务器端获得用户的真实ip 需配置条件②
+        proxy_set_header REMOTE-HOST $remote_addr;
+        proxy_set_header X-Forwarded-For $http_x_forwarded_for; # $http_x_forwarded_for变量 = X-Forwarded-For变量
+    }
+
+}

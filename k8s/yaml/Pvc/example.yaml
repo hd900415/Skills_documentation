@@ -1,0 +1,23 @@
+apiVersion: v1  # API 版本，用于定义 Kubernetes 资源的版本
+kind: PersistentVolumeClaim  # Kubernetes 资源类型
+metadata:
+  name: my-pvc  # PVC 的名称，必须在 Kubernetes 命名空间中唯一
+  labels:
+    app: my-app  # 标签，用于标识资源，可用于选择和组织
+spec:
+  accessModes:  # 定义如何访问卷
+    - ReadWriteOnce  # 访问模式，可选值有 ReadWriteOnce, ReadOnlyMany, 和 ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi  # 请求的存储空间大小
+  storageClassName: standard  # 引用的 StorageClass 的名称，用于定义存储的类型和策略
+  volumeMode: Filesystem  # 卷模式，可选为 Filesystem 或 Block。Filesystem 是默认值，适用于大多数情况
+  volumeName: my-pv  # 可选，指定特定的 PV 名称，通常用于静态绑定
+  selector:
+    matchLabels:
+      release: stable  # 可选，用于选择特定的 PV，通过标签来过滤
+    matchExpressions:  # 可选，用于更复杂的 PV 选择条件
+      - key: environment
+        operator: In  # 运算符，如 In, NotIn, Exists, DoesNotExist
+        values:
+          - production  # 用于匹配的值列表
