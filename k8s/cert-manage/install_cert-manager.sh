@@ -3,7 +3,11 @@ kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.1
 helm repo add jetstack https://charts.jetstack.io
 helm repo update
 
-helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.13.3 --set installCRDs=true
+helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.13.3 --set installCRDs=true \
+   --set ingressShim.defaultIssuerName=letsencrypt-prod \
+   --set ingressShim.defaultIssuerKind=ClusterIssuer \
+   --set ingressShim.defaultIssuerGroup=cert-manager.io
+
 # --set installCRDs=true表示安装Cert-Manager所需的自定义资源定义
 
 # 验证安装

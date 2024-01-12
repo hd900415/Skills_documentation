@@ -5,8 +5,8 @@ yum install -y nfs-utils
 
 mkdir -p /data/{ro,rw} 
 
-vim /etc/exports
-/home/nfs/ 192.168.248.0/24(rw,sync,fsid=0)
+# vim /etc/exports
+# /home/nfs/ 192.168.248.0/24(rw,sync,fsid=0)
 # 或者使用如下配置文件
 ### 配置文件
 cat /etc/exports

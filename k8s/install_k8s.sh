@@ -87,15 +87,12 @@ hostnamectl set-hostname node2
 
 # 1.3 编辑hosts
  #根据内网IP，配置master和node IP
-
-172.31.0.64    master
-172.31.15.134   master
-
-172.31.43.70    node1
-172.31.37.229   node1
-
-172.31.24.189   node2
-
+echo '''
+172.31.11.32  master
+172.31.8.32   node1
+172.31.13.161 node2
+172.31.6.90   node3
+''' >> /etc/hosts
 # 根据需要配置ntpdate 时间服务器
 # 1.4 安装ntpdate并同步时间
 yum -y install ntpdate
@@ -153,6 +150,19 @@ gpgcheck=1
 gpgkey=https://pkgs.k8s.io/core:/stable:/v1.27/rpm/repodata/repomd.xml.key
 exclude=kubelet kubeadm kubectl
 EOF
+
+cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+exclude=kubelet kubeadm kubectl
+EOF
+
+
 
 # 2.3 将桥接的 IPv4 流量传递到 iptables 的链
 # 设置所需的 sysctl 参数，参数在重新启动后保持不变
@@ -269,6 +279,218 @@ kubeadm join <master-node-ip>:6443 --token <token> --discovery-token-ca-cert-has
 # 运行以下命令来查看所有节点的状态：
 kubectl get nodes
 
+# install helm 
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+[root@master ingress-nginx]# helm version
+version.BuildInfo{Version:"v3.13.1", GitCommit:"3547a4b5bf5edb5478ce352e18858d8a552a4110", GitTreeState:"clean", GoVersion:"go1.20.8"}
+
+# install ingress-nginx
+   helm install   ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx  --create-namespace  \
+   --set controller.kind="Deployment"    \
+   --set controller.replicaCount="3"    \
+   --set controller.minAvailable="1"    \
+   --set controller.ingressClassResource.name="nginx"    \
+   --set controller.ingressClassResource.enable="true"    \
+   --set controller.ingressClassResource.default="false"   \
+   --set controller.service.enabled="true"    \
+   --set controller.service.type="NodePort"    \
+   --set controller.service.enableHttps="true"    \
+   --set controller.admissionWebhooks.enabled="true"    \
+   --set controller.metrics.enabled="true"    \
+   --set-string controller.podAnnotations."prometheus\.io/scrape"="true"    \
+   --set-string controller.podAnnotations."prometheus\.io/port"="10254"    \
+   --set defaultBackend.enabled="true"    \
+   --set defaultBackend.name="defaultbackend"    \
+   --set defaultBackend.replicaCount="1"    \
+   --set defaultBackend.minAvailable="1"    \
+   --set serviceAccount.create="true"   \
+   --set rbac.create="true"   \
+   --set podSecurityPolicy.enabled="true"
+
+  #  helm install   ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx \
+  #  --set controller.kind="Deployment"    \
+  #  --set controller.replicaCount="3"    \
+  #  --set controller.minAvailable="1"    \
+  #  --set controller.ingressClassResource.name="nginx"    \
+  #  --set controller.ingressClassResource.enable="true"    \
+  #  --set controller.ingressClassResource.default="false"   \
+  #  --set controller.service.enabled="true"    \
+  #  --set controller.service.type="NodePort"    \
+  #  --set controller.service.enableHttps="true"    \
+  #  --set controller.service.nodePorts.http="80"    \
+  #  --set controller.service.nodePorts.https="443"    \
+  #  --set controller.admissionWebhooks.enabled="true"    \
+  #  --set controller.metrics.enabled="true"    \
+  #  --set-string controller.podAnnotations."prometheus\.io/scrape"="true"    \
+  #  --set-string controller.podAnnotations."prometheus\.io/port"="10254"    \
+  #  --set defaultBackend.enabled="true"    \
+  #  --set defaultBackend.name="defaultbackend"    \
+  #  --set defaultBackend.replicaCount="1"    \
+  #  --set defaultBackend.minAvailable="1"    \
+  #  --set rbac.create="true"   \
+  #  --set serviceAccount.create="true"   \
+  #  --set podSecurityPolicy.enabled="true"
+# install cert-manage
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.13.3/cert-manager.crds.yaml
+
+
+
+helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.13.3 --set installCRDs=true \
+   --set ingressShim.defaultIssuerName=letsencrypt-prod \
+   --set ingressShim.defaultIssuerKind=ClusterIssuer \
+   --set ingressShim.defaultIssuerGroup=cert-manager.io
+
+
+[root@master cert-manager]# cat letsencrypt-cluster-issuer.yaml 
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-cluster-issuer
+spec:
+  acme:
+    email: hd900415@gmail.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-cluster-issuer-key
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+
+# 4. 测试 Let's Encrypt 证书申请
+# 创建一个测试证书申请，看看是否能够通过 HTTP-01 挑战：
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-com
+  namespace: default
+spec:
+  secretName: example-com-tls
+  issuerRef:
+    name: letsencrypt-cluster-issuer
+    kind: ClusterIssuer
+  commonName: yourdomain.com
+  dnsNames:
+  - yourdomain.com
+# 将 yourdomain.com 替换为您的实际域名。
+
+# 5. 监控和调试
+# 监控 cert-manager 的日志和状态，确保证书能够成功签发：
+# kubectl describe certificate example-com
+# 如果出现问题，检查 cert-manager 和 ingress 控制器的日志，以便找到并解决问题。
+
+
+配置 Ingress 资源
+创建一个 ingress 资源，确保它可以正确路由到您的服务。例如，为一个名为 example-service 的服务创建一个基本的 ingress 资源：
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: example-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+  - host: yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: example-service
+            port:
+              number: 80
+这个资源将所有指向 yourdomain.com 的 HTTP 请求路由到 example-service。
+
+3. 确保 Ingress 适用于 HTTP-01 挑战
+cert-manager 会自动创建临时的 ingress 资源来响应 Let's Encrypt 的 HTTP-01 挑战。您已经通过之前的 ClusterIssuer 配置指示 cert-manager 使用 HTTP-01 挑战，所以一般情况下无需进一步配置。
+
+4. 测试 Let's Encrypt 证书申请
+创建一个测试证书申请，看看是否能够通过 HTTP-01 挑战：
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-com
+  namespace: default
+spec:
+  secretName: example-com-tls
+  issuerRef:
+    name: letsencrypt-cluster-issuer
+    kind: ClusterIssuer
+  commonName: yourdomain.com
+  dnsNames:
+  - yourdomain.com
+将 yourdomain.com 替换为您的实际域名。
+
+
+监控和调试
+监控 cert-manager 的日志和状态，确保证书能够成功签发：
+kubectl describe certificate example-com
+
+如果出现问题，检查 cert-manager 和 ingress 控制器的日志，以便找到并解决问题。
+
+# install kubernetes-dashaboard
+helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/
+
+helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard
+--output
+# Release "kubernetes-dashboard" does not exist. Installing it now.
+# NAME: kubernetes-dashboard
+# LAST DEPLOYED: Thu Jan 11 22:22:56 2024
+# NAMESPACE: kubernetes-dashboard
+# STATUS: deployed
+# REVISION: 1
+# TEST SUITE: None
+# NOTES:
+# *********************************************************************************
+# *** PLEASE BE PATIENT: kubernetes-dashboard may take a few minutes to install ***
+# *********************************************************************************
+
+# Get the Kubernetes Dashboard URL by running:
+#   export POD_NAME=$(kubectl get pods -n kubernetes-dashboard -l "app.kubernetes.io/name=kubernetes-dashboard,app.kubernetes.io/instance=kubernetes-dashboard" -o jsonpath="{.items[0].metadata.name}")
+#   echo https://127.0.0.1:8443/
+#   kubectl -n kubernetes-dashboard port-forward $POD_NAME 8443:8443
+
+# 如果您想从 Kubernetes 集群外部访问仪表板，请使用 NodePort 类型公开 Kubernetes 仪表板部署，如下所示：
+kubectl expose deployment kubernetes-dashboard --name k8s-svc --type NodePort --port 8443 -n kubernetes-dashboard
+# 获取svc端口
+kubectl get svc -n kubernetes-dashboard
+# NAME                   TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+# k8s-svc                NodePort    10.107.17.49   <none>        8443:30638/TCP   45s
+# kubernetes-dashboard   ClusterIP   10.110.81.78   <none>        443/TCP          22m
+
+4)  Generate Token for Kubernetes Dashboard 生成token 
+vi k8s-dashboard-account.yaml
+'''
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: kube-system
+'''
+应用 
+kubectl create -f k8s-dashboard-account.yaml
+kubectl -n kube-system create token admin-user
+
+#  参考文档
+https://www.linuxtechi.com/how-to-install-kubernetes-dashboard/
 
 
 

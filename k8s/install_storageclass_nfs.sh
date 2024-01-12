@@ -73,7 +73,7 @@ helm repo add nfs-subdir-external-provisioner https://kubernetes-sigs.github.io/
 
 helm install nfs  nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
     --set storageClass.name=storageclass1 \
-    --set nfs.server=172.31.8.80 \
+    --set nfs.server=172.31.6.90 \
     --set nfs.path=/data/rw \
     --set storageClass.defaultClass=true \
-    -n nfs-sc-default
+    --namespace ingress-nginx  --create-namespace
