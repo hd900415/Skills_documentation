@@ -1,8 +1,27 @@
-### centos7.9系统 主机为aws EC2 .使用的网络模型为Calico
+# k8s整理文档
 
-##########################################################
-### 1.做好服务器规划，初始化系统，例如，master 节点 ,node 节点  ,yum update ，yum upgrade 等操作
-### 关闭 selinux firewalld ,开启iptables ,规则为空
+#### 规划部署：
+
+服务器系统：centos7.9系统 主机为aws EC2 .使用的网络模型为Calico。
+
+服务器规划：4台服务器，配置4核8G，100G SSD，AWS EC2服务器。
+
+IP地址：
+
+| 内网IP        | 主机名 | 外网IP         |
+| ------------- | ------ | -------------- |
+| 172.31.11.32  | master | 18.162.52.114  |
+| 172.31.8.32   | node1  | 18.167.37.154  |
+| 172.31.13.161 | node2  | 18.166.228.75  |
+| 172.31.6.90   | node3  | 16.163.147.161 |
+
+其中node3节点500G SSD ,部署NFS Server。各节点挂在NFS 到本机。
+
+###### 1.初始化系统
+
+做好服务器规划，初始化系统，例如，master 节点 ,node 节点  ,yum update ，yum upgrade 等操作,关闭 selinux firewalld ,开启iptables ,规则为空
+
+```bash
 yum -y update
 yum -y install vim wget
 
@@ -11,8 +30,12 @@ timedatectl set-timezone Asia/Shanghai
 
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
 setenforce 0
+```
 
-### 历史命令格式化
+
+
+###### 2.历史命令格式化
+```bash
 cat << 'EOF' >> /etc/bashrc
 export HISTFILE=/var/log/.history_log
 export HISTSIZE=5000
@@ -21,8 +44,12 @@ export HISTCONTROL=ignoredups
 EOF
 
 source /etc/bashrc
+```
 
-### sys kernel conf
+
+
+###### 3.优化内核参数sys kernel conf
+```bash
 cat << 'EOF' > /etc/sysctl.conf 
 vm.swappiness = 0
 kernel.sysrq = 1
@@ -63,62 +90,81 @@ net.ipv4.tcp_fin_timeout = 30
 EOF
 
 sysctl -p
+```
 
-### 文件数限制
 
+
+###### 4.文件数限制
+```bash
 cat  << 'EOF' >> /etc/security/limits.conf 
 root soft nofile 65535
 root hard nofile 65535
 * soft nofile 65535
 * hard nofile 65535
 EOF
+```
+重启
 
-### 重启
-
-#########################
-### 1.2修改主机名
+###### 5.修改主机名
+```bash
 #master
 hostnamectl set-hostname master
 #node1
 hostnamectl set-hostname node1
 #node2
 hostnamectl set-hostname node2
+```
 
-### 1.3 编辑hosts
- #根据内网IP，配置master和node IP
+###### 6.编辑hosts
+根据内网IP，配置master和node IP
+
+```bash
 echo '''
 172.31.11.32  master
 172.31.8.32   node1
 172.31.13.161 node2
 172.31.6.90   node3
 ''' >> /etc/hosts
-### 根据需要配置ntpdate 时间服务器
-### 1.4 安装ntpdate并同步时间
+```
+
+##### 根据需要配置ntpdate 时间服务器
+###### 7.安装ntpdate并同步时间
+```bash
 yum -y install ntpdate
 ntpdate ntp1.aliyun.com
 systemctl start ntpdate
 systemctl enable ntpdate
 systemctl status ntpdate
+```
 
-### 1.5 安装并配置 bash-completion，添加命令自动补充
+###### 8.安装并配置 bash-completion，添加命令自动补充
+```bash
 yum -y install bash-completion
 source /etc/profile
+```
 
-### 1.6 关闭防火墙
+###### 8.关闭防火墙
+```bash
 systemctl stop firewalld.service 
 systemctl disable firewalld.service
+```
 
-### 1.7 关闭selinux
+###### 9. 关闭selinux
+```bash
 sed -i 's/enforcing/disabled/' /etc/selinux/config  # 永久关闭
+```
 
-### 1.8 关闭 swap
+###### 10.关闭 swap
+```bash
 free -h
 sudo swapoff -a
 sudo sed -i 's/.*swap.*/#&/' /etc/fstab
 free -h
+```
 
-## 二：安装k8s 1.26.x
-### 2.1 安装 Containerd
+#### 二：安装k8s 根据1.26.x
+##### 2.1.安装 Containerd
+```bash
 yum install -y yum-utils device-mapper-persistent-data lvm2
 yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo 
 sudo yum install -y containerd.io
@@ -128,18 +174,30 @@ systemctl stop containerd.service
 cp /etc/containerd/config.toml /etc/containerd/config.toml.bak
 sudo containerd config default > $HOME/config.toml
 sudo cp $HOME/config.toml /etc/containerd/config.toml
-# 修改 /etc/containerd/config.toml 文件后，要将 docker、containerd 停止后，再启动
-# 一般不需要更改
+```
+
+修改 /etc/containerd/config.toml 文件后，要将 docker、containerd 停止后，再启动
+
+一般不需要更改
+
+```bash
 sudo sed -i "s#registry.k8s.io/pause#registry.cn-hangzhou.aliyuncs.com/google_containers/pause#g" /etc/containerd/config.toml
-# https://kubernetes.io/zh-cn/docs/setup/production-environment/container-runtimes/#containerd-systemd
-# 确保 /etc/containerd/config.toml 中的 disabled_plugins 内不存在 cri
+```
+
+参考文档 https://kubernetes.io/zh-cn/docs/setup/production-environment/container-runtimes/#containerd-systemd
+
+确保 /etc/containerd/config.toml 中的 disabled_plugins 内不存在 cri
+
+```bash
 sudo sed -i "s#SystemdCgroup = false#SystemdCgroup = true#g" /etc/containerd/config.toml
 
 #启动containerd
 systemctl start containerd.service
 systemctl status containerd.service
+```
 
-# 2.2 添加 k8s 镜像仓库
+##### 2.2 添加 k8s 镜像仓库
+```bash
 cat <<EOF > /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
 name=Kubernetes
@@ -150,6 +208,7 @@ gpgkey=https://pkgs.k8s.io/core:/stable:/v1.27/rpm/repodata/repomd.xml.key
 exclude=kubelet kubeadm kubectl
 EOF
 
+# 最新的参考第二种仓库文件
 cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
 name=Kubernetes
@@ -160,133 +219,208 @@ repo_gpgcheck=1
 gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 exclude=kubelet kubeadm kubectl
 EOF
+```
 
 
 
-# 2.3 将桥接的 IPv4 流量传递到 iptables 的链
-# 设置所需的 sysctl 参数，参数在重新启动后保持不变
+##### 2.3 将桥接的 IPv4 流量传递到 iptables 的链
+设置所需的 sysctl 参数，参数在重新启动后保持不变
+
+```bash
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-iptables  = 1
 net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
 EOF
+```
 
-# 应用 sysctl 参数而不重新启动
+应用 sysctl 参数而不重新启动
+
+```bash
 sudo sysctl --system
+```
 
-# 启动br_netfilter
+启动br_netfilter
+
+```
 modprobe br_netfilter
 echo 1 > /proc/sys/net/ipv4/ip_forward
-
-# 2.4 安装k8s 
-# 可以安装1.24.0-1.26.3版本,本文使用1.26.0
-# sudo yum install -y kubelet-1.24.0-0 kubeadm-1.24.0-0 kubectl-1.24.0-0 --disableexcludes=kubernetes --nogpgcheck
+```
 
 
+
+##### 2.4 安装k8s 
+可以安装1.24.0-1.26.3版本,本文使用1.26.0
+
+```bash
+sudo yum install -y kubelet-1.24.0-0 kubeadm-1.24.0-0 kubectl-1.24.0-0 --disableexcludes=kubernetes --nogpgcheck
 #sudo yum install -y kubelet-1.25.3-0 kubeadm-1.25.3-0 kubectl-1.25.3-0 --disableexcludes=kubernetes --nogpgcheck
 
-# 2022-11-18，经过测试，版本号：1.25.4
-# sudo yum install -y kubelet-1.25.4-0 kubeadm-1.25.4-0 kubectl-1.25.4-0 --disableexcludes=kubernetes --nogpgcheck
 
-# 2023-02-07，经过测试，版本号：1.25.5，
-# sudo yum install -y kubelet-1.25.5-0 kubeadm-1.25.5-0 kubectl-1.25.5-0 --disableexcludes=kubernetes --nogpgcheck
-
-# 2023-02-07，经过测试，版本号：1.25.6，
-# sudo yum install -y kubelet-1.25.6-0 kubeadm-1.25.6-0 kubectl-1.25.6-0 --disableexcludes=kubernetes --nogpgcheck
-
-# 2023-02-07，经过测试，版本号：1.26.0，
-# sudo yum install -y kubelet-1.26.0-0 kubeadm-1.26.0-0 kubectl-1.26.0-0 --disableexcludes=kubernetes --nogpgcheck
-
-# 2023-02-07，经过测试，版本号：1.26.1，
-# sudo yum install -y kubelet-1.26.1-0 kubeadm-1.26.1-0 kubectl-1.26.1-0 --disableexcludes=kubernetes --nogpgcheck
-
-# 2023-03-02，经过测试，版本号：1.26.2，
-# sudo yum install -y kubelet-1.26.2-0 kubeadm-1.26.2-0 kubectl-1.26.2-0 --disableexcludes=kubernetes --nogpgcheck
-
+2022-11-18，经过测试，版本号：1.25.4
+sudo yum install -y kubelet-1.25.4-0 kubeadm-1.25.4-0 kubectl-1.25.4-0 --disableexcludes=kubernetes --nogpgcheck
+2023-02-07，经过测试，版本号：1.25.5，
+sudo yum install -y kubelet-1.25.5-0 kubeadm-1.25.5-0 kubectl-1.25.5-0 --disableexcludes=kubernetes --nogpgcheck
+2023-02-07，经过测试，版本号：1.25.6，
+sudo yum install -y kubelet-1.25.6-0 kubeadm-1.25.6-0 kubectl-1.25.6-0 --disableexcludes=kubernetes --nogpgcheck
+2023-02-07，经过测试，版本号：1.26.0，
+sudo yum install -y kubelet-1.26.0-0 kubeadm-1.26.0-0 kubectl-1.26.0-0 --disableexcludes=kubernetes --nogpgcheck
+2023-02-07，经过测试，版本号：1.26.1，
+sudo yum install -y kubelet-1.26.1-0 kubeadm-1.26.1-0 kubectl-1.26.1-0 --disableexcludes=kubernetes --nogpgcheck
+2023-03-02，经过测试，版本号：1.26.2，
+sudo yum install -y kubelet-1.26.2-0 kubeadm-1.26.2-0 kubectl-1.26.2-0 --disableexcludes=kubernetes --nogpgcheck
 sudo yum install -y kubelet-1.26.3-0 kubeadm-1.26.3-0 kubectl-1.26.3-0 --disableexcludes=kubernetes --nogpgcheck
 
 systemctl daemon-reload
 sudo systemctl restart kubelet
 sudo systemctl enable kubelet
+```
 
-# 2.5 初始化,只需要在master节点
 
+
+
+
+
+##### 2.5 初始化,只需要在master节点
+
+```bash
 kubeadm init \
  --apiserver-advertise-address=172.31.10.28 \
-# 更改apiserver 为master节点
-
-# 此处会有执行结果输出，根据输出执行对应的命令
+```
 
 
-# master节点执行
+
+更改apiserver 为master节点
+
+此处会有执行结果输出，根据输出执行对应的命令
+
+master节点执行
+
+```bash
 export KUBECONFIG=/etc/kubernetes/admin.conf
+```
 
-# 从节点执行
+
+
+从节点执行
+
+```bash
 kubeadm join 192.168.19.135:6443 --token i7w5xr.u3t483h07aksnzg6 \
 	--discovery-token-ca-cert-hash sha256:04defa4d856cb5bcfe7ad0c3f2d71aa7d48e6c27e4e5821336db00c1e4bf7464
+```
 
-# 将 export KUBECONFIG=/etc/kubernetes/admin.conf 写入到 .bashrc 中，防止终端重启后报错
+
+
+将 export KUBECONFIG=/etc/kubernetes/admin.conf 写入到 .bashrc 中，防止终端重启后报错
+
+```bash
 cd ~
-vim .bashrc
-# 新增以下内容
+vim .bashrc 
+# or 
+echo "export KUBECONFIG=/etc/kubernetes/admin.conf" /root/.bashrc
+```
 
-echo "export KUBECONFIG=/etc/kubernetes/admin.conf " >>/root/.bashrc
 
-# 如果清屏可以在master执行以下命令,查看master节点初始化token
+
+如果清屏可以在master执行以下命令,查看master节点初始化token
+
+```bash
 kubeadm token create --print-join-command
+```
 
-# 2.6 master查看状态
-# 查看节点：
+根据生成的join命令将其他的三个服务器加入集群
+
+##### 2.6 master查看状态
+查看节点：
+
+```bash
 kubectl get node
+```
 
-# 2.7 maste节点配置网络,使用Calico
-# 下载
+应用网络服务
+
+##### 2.7 maste节点配置网络,使用Calico
+###### 下载
+
+```bash
 wget --no-check-certificate https://projectcalico.docs.tigera.io/archive/v3.25/manifests/calico.yaml
-# 修改 calico.yaml 文件
-vim calico.yaml
-# 在 - name: CLUSTER_TYPE 下方添加如下内容
-- name: CLUSTER_TYPE
-  value: "k8s,bgp"
-  # 下方为新增内容
-- name: IP_AUTODETECTION_METHOD
-  value: "interface=网卡名称"
-  # INTERFACE_NAME=ens33
-# 配置网络
+```
+
+
+
+###### 修改 calico.yaml 文件
+
+ ```
+  vim calico.yaml
+   在 - name: CLUSTER_TYPE 下方添加如下内容
+   - name: CLUSTER_TYPE
+    value: "k8s,bgp"
+     下方为新增内容
+   - name: IP_AUTODETECTION_METHOD
+    value: "interface=网卡名称"
+     INTERFACE_NAME=ens33
+ ```
+
+
+###### 配置网络
+```bash
 kubectl apply -f calico.yaml
+```
 
-#需要等待几分钟,再次查看pods,nodes,如下图状态为 Ready
+需要等待几分钟,再次查看pods,nodes,如下图状态为 Ready
 
 
-# 三、创建服务 
-# 创建命名空间
+#### 三、创建服务 
+##### 创建命名空间
 
-# 四。新增节点
-# 在主节点上生成加入令牌
-# 在控制平面（主）节点上运行 kubeadm token create --print-join-command
+#### 四。新增节点
 
-# 这个命令会生成一个 kubeadm join 命令，其中包含了加入集群所需的令牌和证书哈希。这个命令应该类似于这样：
+如果需要新增节点，如下方法操作
 
+##### 在主节点上生成加入令牌
+在控制平面（主）节点上运行 
+
+```bash
+kubeadm token create --print-join-command
+```
+
+这个命令会生成一个 kubeadm join 命令，其中包含了加入集群所需的令牌和证书哈希。这个命令应该类似于这样：
+
+```bash
 kubeadm join <master-node-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
+```
 
-# 在新的工作节点上运行加入命令
-# 在新的工作节点上运行上一步生成的 kubeadm join 命令
+在新的工作节点上运行加入命令
 
-# 确保工作节点能够访问主节点的 6443 端口。运行加入命令后，工作节点会开始下载所需的容器镜像，配置本地 Kubernetes 组件，然后加入到集群中。
+在新的工作节点上运行上一步生成的 kubeadm join 命令
 
-# 在主节点上验证新节点的状态
+确保工作节点能够访问主节点的 6443 端口。运行加入命令后，工作节点会开始下载所需的容器镜像，配置本地 Kubernetes 组件，然后加入到集群中。
 
-# 运行以下命令来查看所有节点的状态：
+在主节点上验证新节点的状态
+
+运行以下命令来查看所有节点的状态：
+
+```
 kubectl get nodes
+```
 
-# ====================================================================================
-# install helm 
+
+
+#### 五.install helm 
+```bash
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 [root@master ingress-nginx]# helm version
 version.BuildInfo{Version:"v3.13.1", GitCommit:"3547a4b5bf5edb5478ce352e18858d8a552a4110", GitTreeState:"clean", GoVersion:"go1.20.8"}
+```
 
-# install ingress-nginx
-   helm install   ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx  --create-namespace  \
+
+
+#### 六.install ingress-nginx
+
+
+```bash
+ helm install   ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx  --create-namespace  \
    --set controller.kind="Deployment"    \
    --set controller.replicaCount="3"    \
    --set controller.minAvailable="1"    \
@@ -307,7 +441,8 @@ version.BuildInfo{Version:"v3.13.1", GitCommit:"3547a4b5bf5edb5478ce352e18858d8a
    --set serviceAccount.create="true"   \
    --set rbac.create="true"   \
    --set podSecurityPolicy.enabled="true"
-
+   
+#   or like this 
   #  helm install   ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx \
   #  --set controller.kind="Deployment"    \
   #  --set controller.replicaCount="3"    \
@@ -332,35 +467,47 @@ version.BuildInfo{Version:"v3.13.1", GitCommit:"3547a4b5bf5edb5478ce352e18858d8a
   #  --set serviceAccount.create="true"   \
   #  --set podSecurityPolicy.enabled="true"
 
+```
 
-# install cert-manage
+#### 七.install cert-manage
+
+添加helm repo 仓库
+
+```bash
 helm repo add jetstack https://charts.jetstack.io
 helm repo update
 kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.13.3/cert-manager.crds.yaml
-
-
-
+        
 helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.13.3 --set installCRDs=true \
-   --set ingressShim.defaultIssuerName=letsencrypt-prod \
-   --set ingressShim.defaultIssuerKind=ClusterIssuer \
-   --set ingressShim.defaultIssuerGroup=cert-manager.io
+  --set ingressShim.defaultIssuerName=letsencrypt-prod \
+  --set ingressShim.defaultIssuerKind=ClusterIssuer \
+  --set ingressShim.defaultIssuerGroup=cert-manager.io
 
+# 使用邮箱添加letsencrypt注册账号;
 
+```
+
+​    
+
+```bash
 [root@master cert-manager]# cat letsencrypt-cluster-issuer.yaml 
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-cluster-issuer
-spec:
-  acme:
-    email: hd900415@gmail.com
-    server: https://acme-v02.api.letsencrypt.org/directory
-    privateKeySecretRef:
-      name: letsencrypt-cluster-issuer-key
-    solvers:
-    - http01:
-        ingress:
-          class: nginx
+piVersion: cert-manager.io/v1
+ind: ClusterIssuer
+etadata:
+ name: letsencrypt-cluster-issuer
+pec:
+ acme:
+   email: hd900415@gmail.com
+   server: https://acme-v02.api.letsencrypt.org/directory
+   privateKeySecretRef:
+     name: letsencrypt-cluster-issuer-key
+   solvers:
+  - http01:
+    ingress:
+      class: nginx
+```
+
+​    
 
 
 # 4. 测试 Let's Encrypt 证书申请
@@ -406,25 +553,25 @@ spec:
             name: example-service
             port:
               number: 80
-这个资源将所有指向 yourdomain.com 的 HTTP 请求路由到 example-service。
+        这个资源将所有指向 yourdomain.com 的 HTTP 请求路由到 example-service。
 
 3. 确保 Ingress 适用于 HTTP-01 挑战
 cert-manager 会自动创建临时的 ingress 资源来响应 Let's Encrypt 的 HTTP-01 挑战。您已经通过之前的 ClusterIssuer 配置指示 cert-manager 使用 HTTP-01 挑战，所以一般情况下无需进一步配置。
 
 4. 测试 Let's Encrypt 证书申请
-创建一个测试证书申请，看看是否能够通过 HTTP-01 挑战：
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: example-com
-  namespace: default
-spec:
-  secretName: example-com-tls
-  issuerRef:
+    创建一个测试证书申请，看看是否能够通过 HTTP-01 挑战：
+    apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+    name: example-com
+    namespace: default
+    spec:
+    secretName: example-com-tls
+    issuerRef:
     name: letsencrypt-cluster-issuer
     kind: ClusterIssuer
-  commonName: yourdomain.com
-  dnsNames:
+    commonName: yourdomain.com
+    dnsNames:
   - yourdomain.com
 将 yourdomain.com 替换为您的实际域名。
 
@@ -466,13 +613,13 @@ kubectl get svc -n kubernetes-dashboard
 # kubernetes-dashboard   ClusterIP   10.110.81.78   <none>        443/TCP          22m
 
 4)  Generate Token for Kubernetes Dashboard 生成token 
-vi k8s-dashboard-account.yaml
-'''
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: admin-user
-  namespace: kube-system
+    vi k8s-dashboard-account.yaml
+    '''
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+    name: admin-user
+    namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -486,10 +633,10 @@ subjects:
 - kind: ServiceAccount
   name: admin-user
   namespace: kube-system
-'''
-应用 
-kubectl create -f k8s-dashboard-account.yaml
-kubectl -n kube-system create token admin-user
+  '''
+  应用 
+  kubectl create -f k8s-dashboard-account.yaml
+  kubectl -n kube-system create token admin-user
 
 #  参考文档
 https://www.linuxtechi.com/how-to-install-kubernetes-dashboard/
@@ -497,14 +644,28 @@ https://www.linuxtechi.com/how-to-install-kubernetes-dashboard/
 
 
 
+## install kubesphere
+https://www.kubesphere.io/zh/docs/v3.4/installing-on-kubernetes/introduction/overview/
 
+### 执行以下命令以开始安装：
+kubectl apply -f https://github.com/kubesphere/ks-installer/releases/download/v3.4.1/kubesphere-installer.yaml
+kubectl apply -f https://github.com/kubesphere/ks-installer/releases/download/v3.4.1/cluster-configuration.yaml
 
+### 检查安装日志：
+kubectl logs -n kubesphere-system $(kubectl get pod -n kubesphere-system -l 'app in (ks-install, ks-installer)' -o jsonpath='{.items[0].metadata.name}') -f
 
+### 使用 kubectl get pod --all-namespaces 查看所有 Pod 在 KubeSphere 相关的命名空间是否正常运行。如果是正常运行，请通过以下命令来检查控制台的端口（默认为 30880）：
+kubectl get svc/ks-console -n kubesphere-system
 
+### 确保在安全组中打开了 30880 端口，通过 NodePort (IP:30880) 使用默认帐户和密码 (admin/P@88w0rd) 访问 Web 控制台。
 
+<!-- 您可以在 KubeSphere 安装之前或之后启用可插拔组件。请参考示例文件 cluster-configuration.yaml 获取更多详细信息。
+请确保集群中有足够的 CPU 和内存。
+强烈建议安装这些可插拔组件，以体验 KubeSphere 提供的全栈功能。 -->
 
-
-
+bash '''
+参考文档 https://www.kubesphere.io/zh/docs/v3.4/pluggable-components/
+'''
 
 
 
