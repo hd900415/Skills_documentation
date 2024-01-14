@@ -1,9 +1,8 @@
-#!/bin/bash
-# centos7.9系统 主机为aws EC2 .使用的网络模型为Calico
+### centos7.9系统 主机为aws EC2 .使用的网络模型为Calico
 
 ##########################################################
-# 1.做好服务器规划，初始化系统，例如，master 节点 ,node 节点  ,yum update ，yum upgrade 等操作
-# 关闭 selinux firewalld ,开启iptables ,规则为空
+### 1.做好服务器规划，初始化系统，例如，master 节点 ,node 节点  ,yum update ，yum upgrade 等操作
+### 关闭 selinux firewalld ,开启iptables ,规则为空
 yum -y update
 yum -y install vim wget
 
@@ -13,7 +12,7 @@ timedatectl set-timezone Asia/Shanghai
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
 setenforce 0
 
-# 历史命令格式化
+### 历史命令格式化
 cat << 'EOF' >> /etc/bashrc
 export HISTFILE=/var/log/.history_log
 export HISTSIZE=5000
@@ -23,7 +22,7 @@ EOF
 
 source /etc/bashrc
 
-# sys kernel conf
+### sys kernel conf
 cat << 'EOF' > /etc/sysctl.conf 
 vm.swappiness = 0
 kernel.sysrq = 1
@@ -65,7 +64,7 @@ EOF
 
 sysctl -p
 
-# 文件数限制
+### 文件数限制
 
 cat  << 'EOF' >> /etc/security/limits.conf 
 root soft nofile 65535
@@ -74,10 +73,10 @@ root hard nofile 65535
 * hard nofile 65535
 EOF
 
-# 重启
+### 重启
 
 #########################
-# 1.2修改主机名
+### 1.2修改主机名
 #master
 hostnamectl set-hostname master
 #node1
@@ -85,7 +84,7 @@ hostnamectl set-hostname node1
 #node2
 hostnamectl set-hostname node2
 
-# 1.3 编辑hosts
+### 1.3 编辑hosts
  #根据内网IP，配置master和node IP
 echo '''
 172.31.11.32  master
@@ -93,33 +92,33 @@ echo '''
 172.31.13.161 node2
 172.31.6.90   node3
 ''' >> /etc/hosts
-# 根据需要配置ntpdate 时间服务器
-# 1.4 安装ntpdate并同步时间
+### 根据需要配置ntpdate 时间服务器
+### 1.4 安装ntpdate并同步时间
 yum -y install ntpdate
 ntpdate ntp1.aliyun.com
 systemctl start ntpdate
 systemctl enable ntpdate
 systemctl status ntpdate
 
-# 1.5 安装并配置 bash-completion，添加命令自动补充
+### 1.5 安装并配置 bash-completion，添加命令自动补充
 yum -y install bash-completion
 source /etc/profile
 
-# 1.6 关闭防火墙
+### 1.6 关闭防火墙
 systemctl stop firewalld.service 
 systemctl disable firewalld.service
 
-# 1.7 关闭selinux
+### 1.7 关闭selinux
 sed -i 's/enforcing/disabled/' /etc/selinux/config  # 永久关闭
 
-# 1.8 关闭 swap
+### 1.8 关闭 swap
 free -h
 sudo swapoff -a
 sudo sed -i 's/.*swap.*/#&/' /etc/fstab
 free -h
 
-# 二：安装k8s 1.26.x
-# 2.1 安装 Containerd
+## 二：安装k8s 1.26.x
+### 2.1 安装 Containerd
 yum install -y yum-utils device-mapper-persistent-data lvm2
 yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo 
 sudo yum install -y containerd.io
@@ -279,6 +278,7 @@ kubeadm join <master-node-ip>:6443 --token <token> --discovery-token-ca-cert-has
 # 运行以下命令来查看所有节点的状态：
 kubectl get nodes
 
+# ====================================================================================
 # install helm 
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
@@ -331,6 +331,8 @@ version.BuildInfo{Version:"v3.13.1", GitCommit:"3547a4b5bf5edb5478ce352e18858d8a
   #  --set rbac.create="true"   \
   #  --set serviceAccount.create="true"   \
   #  --set podSecurityPolicy.enabled="true"
+
+
 # install cert-manage
 helm repo add jetstack https://charts.jetstack.io
 helm repo update
