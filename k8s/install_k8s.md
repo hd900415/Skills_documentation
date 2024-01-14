@@ -471,7 +471,7 @@ version.BuildInfo{Version:"v3.13.1", GitCommit:"3547a4b5bf5edb5478ce352e18858d8a
 
 #### 七.install cert-manage
 
-添加helm repo 仓库
+###### 1.添加helm repo 仓库
 
 ```bash
 helm repo add jetstack https://charts.jetstack.io
@@ -483,58 +483,68 @@ helm install cert-manager jetstack/cert-manager --namespace cert-manager --creat
   --set ingressShim.defaultIssuerKind=ClusterIssuer \
   --set ingressShim.defaultIssuerGroup=cert-manager.io
 
-# 使用邮箱添加letsencrypt注册账号;
+#
 
 ```
 
+######  2.使用邮箱添加letsencrypt注册账号;
+
+[root@master cert-manager]# cat letsencrypt-cluster-issuer.yaml 
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-cluster-issuer
+spec:
+  acme:
+    email: hd900415@gmail.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-cluster-issuer-key
+    solvers:
+   - http01:
+     ingress:
+       class: nginx
+```
+
 ​    
+
+
+###### 3. 测试 Let's Encrypt 证书申请
+创建一个测试证书申请，看看是否能够通过 HTTP-01 挑战：
+
+   ```yaml
+   apiVersion: cert-manager.io/v1
+   kind: Certificate
+   metadata:
+     name: example-com
+     namespace: default
+   spec:
+     secretName: example-com-tls
+     issuerRef:
+       name: letsencrypt-cluster-issuer
+       kind: ClusterIssuer
+     commonName: yourdomain.com
+     dnsNames:
+     - yourdomain.com
+   ```
+
+将 yourdomain.com 替换为您的实际域名。
+
+#### 4. 监控和调试
+4.1.监控 cert-manager 的日志和状态，确保证书能够成功签发：
 
 ```bash
-[root@master cert-manager]# cat letsencrypt-cluster-issuer.yaml 
-piVersion: cert-manager.io/v1
-ind: ClusterIssuer
-etadata:
- name: letsencrypt-cluster-issuer
-pec:
- acme:
-   email: hd900415@gmail.com
-   server: https://acme-v02.api.letsencrypt.org/directory
-   privateKeySecretRef:
-     name: letsencrypt-cluster-issuer-key
-   solvers:
-  - http01:
-    ingress:
-      class: nginx
+kubectl describe certificate example-com
 ```
 
-​    
-
-
-# 4. 测试 Let's Encrypt 证书申请
-# 创建一个测试证书申请，看看是否能够通过 HTTP-01 挑战：
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: example-com
-  namespace: default
-spec:
-  secretName: example-com-tls
-  issuerRef:
-    name: letsencrypt-cluster-issuer
-    kind: ClusterIssuer
-  commonName: yourdomain.com
-  dnsNames:
-  - yourdomain.com
-# 将 yourdomain.com 替换为您的实际域名。
-
-# 5. 监控和调试
-# 监控 cert-manager 的日志和状态，确保证书能够成功签发：
-# kubectl describe certificate example-com
-# 如果出现问题，检查 cert-manager 和 ingress 控制器的日志，以便找到并解决问题。
-
+如果出现问题，检查 cert-manager 和 ingress 控制器的日志，以便找到并解决问题。
 
 配置 Ingress 资源
 创建一个 ingress 资源，确保它可以正确路由到您的服务。例如，为一个名为 example-service 的服务创建一个基本的 ingress 资源：
+
+```yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -543,6 +553,7 @@ metadata:
     kubernetes.io/ingress.class: "nginx"
 spec:
   rules:
+
   - host: yourdomain.com
     http:
       paths:
@@ -553,73 +564,97 @@ spec:
             name: example-service
             port:
               number: 80
-        这个资源将所有指向 yourdomain.com 的 HTTP 请求路由到 example-service。
+```
 
-3. 确保 Ingress 适用于 HTTP-01 挑战
+这个资源将所有指向 yourdomain.com 的 HTTP 请求路由到 example-service。
+
+###### 4.2.确保 Ingress 适用于 HTTP-01 挑战
+
 cert-manager 会自动创建临时的 ingress 资源来响应 Let's Encrypt 的 HTTP-01 挑战。您已经通过之前的 ClusterIssuer 配置指示 cert-manager 使用 HTTP-01 挑战，所以一般情况下无需进一步配置。
 
-4. 测试 Let's Encrypt 证书申请
-    创建一个测试证书申请，看看是否能够通过 HTTP-01 挑战：
-    apiVersion: cert-manager.io/v1
-    kind: Certificate
-    metadata:
-    name: example-com
-    namespace: default
-    spec:
-    secretName: example-com-tls
-    issuerRef:
-    name: letsencrypt-cluster-issuer
-    kind: ClusterIssuer
-    commonName: yourdomain.com
-    dnsNames:
+###### 4.3.测试 Let's Encrypt 证书申请
+
+创建一个测试证书申请，看看是否能够通过 HTTP-01 挑战：
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+name: example-com
+namespace: default
+spec:
+secretName: example-com-tls
+issuerRef:
+name: letsencrypt-cluster-issuer
+kind: ClusterIssuer
+commonName: yourdomain.com
+dnsNames:
+
   - yourdomain.com
+```
+
 将 yourdomain.com 替换为您的实际域名。
 
+###### 4.4.监控和调试
 
-监控和调试
 监控 cert-manager 的日志和状态，确保证书能够成功签发：
+
+```bash
 kubectl describe certificate example-com
+```
 
 如果出现问题，检查 cert-manager 和 ingress 控制器的日志，以便找到并解决问题。
 
-# install kubernetes-dashaboard
+#### 八.install kubernetes-dashaboard
+
+```bash
 helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/
 
-helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard
---output
-# Release "kubernetes-dashboard" does not exist. Installing it now.
-# NAME: kubernetes-dashboard
-# LAST DEPLOYED: Thu Jan 11 22:22:56 2024
-# NAMESPACE: kubernetes-dashboard
-# STATUS: deployed
-# REVISION: 1
-# TEST SUITE: None
-# NOTES:
-# *********************************************************************************
-# *** PLEASE BE PATIENT: kubernetes-dashboard may take a few minutes to install ***
-# *********************************************************************************
+helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard --output
 
-# Get the Kubernetes Dashboard URL by running:
-#   export POD_NAME=$(kubectl get pods -n kubernetes-dashboard -l "app.kubernetes.io/name=kubernetes-dashboard,app.kubernetes.io/instance=kubernetes-dashboard" -o jsonpath="{.items[0].metadata.name}")
-#   echo https://127.0.0.1:8443/
-#   kubectl -n kubernetes-dashboard port-forward $POD_NAME 8443:8443
+Release "kubernetes-dashboard" does not exist. Installing it now.
+NAME: kubernetes-dashboard
+LAST DEPLOYED: Thu Jan 11 22:22:56 2024
+NAMESPACE: kubernetes-dashboard
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
 
-# 如果您想从 Kubernetes 集群外部访问仪表板，请使用 NodePort 类型公开 Kubernetes 仪表板部署，如下所示：
+*********************************************************************************
+*** PLEASE BE PATIENT: kubernetes-dashboard may take a few minutes to install ***
+*********************************************************************************
+Get the Kubernetes Dashboard URL by running:
+export POD_NAME=$(kubectl get pods -n kubernetes-dashboard -l "app.kubernetes.io/name=kubernetes-dashboard,app.kubernetes.io/instance=kubernetes-dashboard" -o jsonpath="{.items[0].metadata.name}")
+echo https://127.0.0.1:8443/
+kubectl -n kubernetes-dashboard port-forward $POD_NAME 8443:8443
+```
+
+如果您想从 Kubernetes 集群外部访问仪表板，请使用 NodePort 类型公开 Kubernetes 仪表板部署，如下所示：
+
+```bash
 kubectl expose deployment kubernetes-dashboard --name k8s-svc --type NodePort --port 8443 -n kubernetes-dashboard
-# 获取svc端口
-kubectl get svc -n kubernetes-dashboard
-# NAME                   TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
-# k8s-svc                NodePort    10.107.17.49   <none>        8443:30638/TCP   45s
-# kubernetes-dashboard   ClusterIP   10.110.81.78   <none>        443/TCP          22m
+```
 
-4)  Generate Token for Kubernetes Dashboard 生成token 
-    vi k8s-dashboard-account.yaml
-    '''
-    apiVersion: v1
-    kind: ServiceAccount
-    metadata:
-    name: admin-user
-    namespace: kube-system
+##### 获取svc端口
+
+```bash
+kubectl get svc -n kubernetes-dashboard
+NAME                   TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+k8s-svc                NodePort    10.107.17.49   <none>        8443:30638/TCP   45s
+kubernetes-dashboard   ClusterIP   10.110.81.78   <none>        443/TCP          22m
+```
+
+Generate Token for Kubernetes Dashboard 生成token 
+
+##### vi k8s-dashboard-account.yaml
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+name: admin-user
+namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -630,42 +665,57 @@ roleRef:
   kind: ClusterRole
   name: cluster-admin
 subjects:
-- kind: ServiceAccount
+---
+kind: ServiceAccount
   name: admin-user
   namespace: kube-system
-  '''
-  应用 
-  kubectl create -f k8s-dashboard-account.yaml
-  kubectl -n kube-system create token admin-user
 
-#  参考文档
+```
+
+##### 应用 
+
+```
+kubectl create -f k8s-dashboard-account.yaml
+kubectl -n kube-system create token admin-user
+```
+
+参考文档
+
 https://www.linuxtechi.com/how-to-install-kubernetes-dashboard/
 
+#### 九.install kubesphere
 
+##### 参考文档
 
-
-## install kubesphere
 https://www.kubesphere.io/zh/docs/v3.4/installing-on-kubernetes/introduction/overview/
 
-### 执行以下命令以开始安装：
+执行以下命令以开始安装：
+
+```bash
 kubectl apply -f https://github.com/kubesphere/ks-installer/releases/download/v3.4.1/kubesphere-installer.yaml
 kubectl apply -f https://github.com/kubesphere/ks-installer/releases/download/v3.4.1/cluster-configuration.yaml
+```
 
-### 检查安装日志：
+检查安装日志：
+
+```bash
 kubectl logs -n kubesphere-system $(kubectl get pod -n kubesphere-system -l 'app in (ks-install, ks-installer)' -o jsonpath='{.items[0].metadata.name}') -f
+```
 
-### 使用 kubectl get pod --all-namespaces 查看所有 Pod 在 KubeSphere 相关的命名空间是否正常运行。如果是正常运行，请通过以下命令来检查控制台的端口（默认为 30880）：
+使用 kubectl get pod --all-namespaces 查看所有 Pod 在 KubeSphere 相关的命名空间是否正常运行。如果是正常运行，请通过以下命令来检查控制台的端口（默认为 30880）：
+
+```bash
 kubectl get svc/ks-console -n kubesphere-system
+```
 
-### 确保在安全组中打开了 30880 端口，通过 NodePort (IP:30880) 使用默认帐户和密码 (admin/P@88w0rd) 访问 Web 控制台。
+确保在安全组中打开了 30880 端口，通过 NodePort (IP:30880) 使用默认帐户和密码 (admin/P@88w0rd) 访问 Web 控制台。
 
-<!-- 您可以在 KubeSphere 安装之前或之后启用可插拔组件。请参考示例文件 cluster-configuration.yaml 获取更多详细信息。
+您可以在 KubeSphere 安装之前或之后启用可插拔组件。请参考示例文件 cluster-configuration.yaml 获取更多详细信息。
 请确保集群中有足够的 CPU 和内存。
-强烈建议安装这些可插拔组件，以体验 KubeSphere 提供的全栈功能。 -->
+强烈建议安装这些可插拔组件，以体验 KubeSphere 提供的全栈功能。
 
-bash '''
 参考文档 https://www.kubesphere.io/zh/docs/v3.4/pluggable-components/
-'''
+
 
 
 
